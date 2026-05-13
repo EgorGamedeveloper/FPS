@@ -129,7 +129,7 @@ namespace Unity.FPS.Gameplay
 
             if (activeWeapon != null && m_WeaponSwitchState == WeaponSwitchState.Up)
             {
-                if (!activeWeapon.AutomaticReload && m_InputHandler.GetReloadButtonDown() && activeWeapon.CurrentAmmoRatio < 1.0f)
+                if (m_InputHandler.GetReloadButtonDown() && activeWeapon.CurrentAmmoRatio < 1.0f && activeWeapon.HasAmmoToReload())
                 {
                     IsAiming = false;
                     activeWeapon.StartReloadAnimation();
@@ -263,6 +263,33 @@ namespace Unity.FPS.Gameplay
                     m_WeaponSwitchState = WeaponSwitchState.PutDownPrevious;
                 }
             }
+        }
+
+
+        public int AddAmmo(string ammoType, int amount)
+        {
+            int ammoAdded = 0;
+
+            foreach (WeaponController weapon in m_WeaponSlots)
+            {
+                if (weapon != null && weapon.AmmoMatches(ammoType))
+                {
+                    ammoAdded += weapon.AddCarriedAmmo(amount);
+                }
+            }
+
+            return ammoAdded;
+        }
+
+        public bool CanPickupAmmo(string ammoType)
+        {
+            foreach (WeaponController weapon in m_WeaponSlots)
+            {
+                if (weapon != null && weapon.CanPickupAmmo(ammoType))
+                    return true;
+            }
+
+            return false;
         }
 
         public WeaponController HasWeapon(WeaponController weaponPrefab)

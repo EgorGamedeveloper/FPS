@@ -50,6 +50,8 @@ namespace Unity.FPS.Game
     public class AmmoPickupEvent : GameEvent
     {
         public WeaponController Weapon;
+        public string AmmoType;
+        public int Amount;
     }
 
     public class DamageEvent : GameEvent

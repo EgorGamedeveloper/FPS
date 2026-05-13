@@ -71,11 +71,11 @@ namespace Unity.FPS.Game
         public Vector3 AimOffset;
 
         [Header("Ammo Parameters")]
-        [Tooltip("Should the player manually reload")]
-        public bool AutomaticReload = true;
+        [Tooltip("If enabled, the weapon starts reloading automatically when its magazine is empty")]
+        public bool AutomaticReload = false;
         [Tooltip("Has physical clip on the weapon and ammo shells are ejected when firing")]
         public bool HasPhysicalBullets = false;
-        [Tooltip("Number of bullets in a clip")]
+        [Tooltip("Number of bullets in a clip for legacy shell-casing setup")]
         public int ClipSize = 30;
         [Tooltip("Bullet Shell Casing")]
         public GameObject ShellCasing;
@@ -85,14 +85,26 @@ namespace Unity.FPS.Game
         [Range(0.0f, 5.0f)] public float ShellCasingEjectionForce = 2.0f;
         [Tooltip("Maximum number of shell that can be spawned before reuse")]
         [Range(1, 30)] public int ShellPoolSize = 1;
-        [Tooltip("Amount of ammo reloaded per second")]
+        [Tooltip("Seconds required to refill the magazine from carried ammo")]
         public float AmmoReloadRate = 1f;
 
-        [Tooltip("Delay after the last shot before starting to reload")]
-        public float AmmoReloadDelay = 2f;
+        [Tooltip("Delay after the last shot before automatic reload can start")]
+        public float AmmoReloadDelay = 0.25f;
 
-        [Tooltip("Maximum amount of ammo in the gun")]
+        [Tooltip("Maximum amount of ammo in the current magazine")]
         public int MaxAmmo = 8;
+
+        [Tooltip("Ammo type consumed by this weapon. Ammo pickups with the same key refill this weapon")]
+        public string AmmoType = "Default";
+
+        [Tooltip("Ammo carried outside of the current magazine when this weapon is created")]
+        public int StartingCarriedAmmo = 30;
+
+        [Tooltip("Maximum ammo carried outside of the current magazine")]
+        public int MaxCarriedAmmo = 90;
+
+        [Tooltip("If enabled, this weapon consumes no magazine or carried ammo. Useful for enemy weapons")]
+        public bool InfiniteAmmo = false;
 
         [Header("Charging parameters (charging weapons only)")]
         [Tooltip("Trigger a shot when maximum charge is reached")]
@@ -123,6 +135,9 @@ namespace Unity.FPS.Game
         [Tooltip("Sound played when changing to this weapon")]
         public AudioClip ChangeWeaponSfx;
 
+        [Tooltip("Sound played when reloading this weapon")]
+        public AudioClip ReloadSfx;
+
         [Tooltip("Continuous Shooting Sound")] public bool UseContinuousShootSound = false;
         public AudioClip ContinuousShootStartSfx;
         public AudioClip ContinuousShootLoopSfx;
@@ -133,8 +148,9 @@ namespace Unity.FPS.Game
         public UnityAction OnShoot;
         public event Action OnShootProcessed;
 
-        int m_CarriedPhysicalBullets;
+        int m_CarriedAmmo;
         float m_CurrentAmmo;
+        float m_ReloadStartTime;
         float m_LastTimeShot = Mathf.NegativeInfinity;
         public float LastChargeTriggerTimestamp { get; private set; }
         Vector3 m_LastMuzzlePosition;
@@ -152,21 +168,28 @@ namespace Unity.FPS.Game
             (ShootType != WeaponShootType.Charge ? 1f : Mathf.Max(1f, AmmoUsedOnStartCharge)) /
             (MaxAmmo * BulletsPerShot);
 
-        public int GetCarriedPhysicalBullets() => m_CarriedPhysicalBullets;
-        public int GetCurrentAmmo() => Mathf.FloorToInt(m_CurrentAmmo);
+        public int GetCarriedPhysicalBullets() => GetCarriedAmmo();
+        public int GetCarriedAmmo() => InfiniteAmmo ? MaxCarriedAmmo : m_CarriedAmmo;
+        public int GetCurrentAmmo() => InfiniteAmmo ? MaxAmmo : Mathf.FloorToInt(m_CurrentAmmo);
+        public bool HasAmmoToReload() => InfiniteAmmo || m_CarriedAmmo > 0;
+        public bool CanPickupAmmo() => InfiniteAmmo == false && m_CarriedAmmo < MaxCarriedAmmo;
+        public bool CanPickupAmmo(string ammoType) => AmmoMatches(ammoType) && CanPickupAmmo();
 
         AudioSource m_ShootAudioSource;
 
         public bool IsReloading { get; private set; }
 
         const string k_AnimAttackParameter = "Attack";
+        const string k_AnimReloadParameter = "Reload";
 
         private Queue<Rigidbody> m_PhysicalAmmoPool;
 
         void Awake()
         {
+            MaxAmmo = Mathf.Max(1, MaxAmmo);
+            MaxCarriedAmmo = Mathf.Max(0, MaxCarriedAmmo);
             m_CurrentAmmo = MaxAmmo;
-            m_CarriedPhysicalBullets = HasPhysicalBullets ? ClipSize : 0;
+            m_CarriedAmmo = Mathf.Clamp(StartingCarriedAmmo, 0, MaxCarriedAmmo);
             m_LastMuzzlePosition = WeaponMuzzle.position;
 
             m_ShootAudioSource = GetComponent<AudioSource>();
@@ -196,7 +219,22 @@ namespace Unity.FPS.Game
             }
         }
 
-        public void AddCarriablePhysicalBullets(int count) => m_CarriedPhysicalBullets = Mathf.Max(m_CarriedPhysicalBullets + count, MaxAmmo);
+        public bool AmmoMatches(string ammoType)
+        {
+            return string.Equals(AmmoType, ammoType, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public int AddCarriablePhysicalBullets(int count) => AddCarriedAmmo(count);
+
+        public int AddCarriedAmmo(int count)
+        {
+            if (InfiniteAmmo || count <= 0)
+                return 0;
+
+            int ammoBefore = m_CarriedAmmo;
+            m_CarriedAmmo = Mathf.Clamp(m_CarriedAmmo + count, 0, MaxCarriedAmmo);
+            return m_CarriedAmmo - ammoBefore;
+        }
 
         void ShootShell()
         {
@@ -214,12 +252,21 @@ namespace Unity.FPS.Game
 
         void PlaySFX(AudioClip sfx) => AudioUtility.CreateSFX(sfx, transform.position, AudioUtility.AudioGroups.WeaponShoot, 0.0f);
 
-
         void Reload()
         {
-            if (m_CarriedPhysicalBullets > 0)
+            if (!IsReloading)
+                return;
+
+            if (InfiniteAmmo)
             {
-                m_CurrentAmmo = Mathf.Min(m_CarriedPhysicalBullets, ClipSize);
+                m_CurrentAmmo = MaxAmmo;
+            }
+            else
+            {
+                int missingAmmo = Mathf.Max(0, MaxAmmo - Mathf.FloorToInt(m_CurrentAmmo));
+                int ammoToLoad = Mathf.Min(missingAmmo, m_CarriedAmmo);
+                m_CurrentAmmo = Mathf.Clamp(m_CurrentAmmo + ammoToLoad, 0f, MaxAmmo);
+                m_CarriedAmmo -= ammoToLoad;
             }
 
             IsReloading = false;
@@ -227,10 +274,21 @@ namespace Unity.FPS.Game
 
         public void StartReloadAnimation()
         {
-            if (m_CurrentAmmo < m_CarriedPhysicalBullets)
+            if (IsReloading || IsCharging || GetCurrentAmmo() >= MaxAmmo || !HasAmmoToReload())
+                return;
+
+            IsReloading = true;
+            m_ReloadStartTime = Time.time;
+
+            Animator animator = WeaponAnimator != null ? WeaponAnimator : GetComponent<Animator>();
+            if (animator != null)
             {
-                GetComponent<Animator>().SetTrigger("Reload");
-                IsReloading = true;
+                animator.SetTrigger(k_AnimReloadParameter);
+            }
+
+            if (ReloadSfx)
+            {
+                m_ShootAudioSource.PlayOneShot(ReloadSfx);
             }
         }
 
@@ -249,29 +307,24 @@ namespace Unity.FPS.Game
 
         void UpdateAmmo()
         {
-            if (AutomaticReload && m_LastTimeShot + AmmoReloadDelay < Time.time && m_CurrentAmmo < MaxAmmo && !IsCharging)
+            if (InfiniteAmmo)
             {
-                // reloads weapon over time
-                m_CurrentAmmo += AmmoReloadRate * Time.deltaTime;
-
-                // limits ammo to max value
-                m_CurrentAmmo = Mathf.Clamp(m_CurrentAmmo, 0, MaxAmmo);
-
-                IsCooling = true;
-            }
-            else
-            {
-                IsCooling = false;
+                m_CurrentAmmo = MaxAmmo;
             }
 
-            if (MaxAmmo == Mathf.Infinity)
+            if (IsReloading && m_ReloadStartTime + AmmoReloadRate <= Time.time)
             {
-                CurrentAmmoRatio = 1f;
+                Reload();
             }
-            else
+
+            if (AutomaticReload && !IsReloading && !IsCharging && GetCurrentAmmo() == 0 && HasAmmoToReload() &&
+                m_LastTimeShot + AmmoReloadDelay < Time.time)
             {
-                CurrentAmmoRatio = m_CurrentAmmo / MaxAmmo;
+                StartReloadAnimation();
             }
+
+            CurrentAmmoRatio = MaxAmmo <= 0 ? 1f : m_CurrentAmmo / MaxAmmo;
+            IsCooling = IsReloading;
         }
 
         void UpdateCharge()
@@ -297,7 +350,7 @@ namespace Unity.FPS.Game
 
                     // See if we can actually add this charge
                     float ammoThisChargeWouldRequire = chargeAdded * AmmoUsageRateWhileCharging;
-                    if (ammoThisChargeWouldRequire <= m_CurrentAmmo)
+                    if (HasAmmo(ammoThisChargeWouldRequire))
                     {
                         // Use ammo based on charge added
                         UseAmmo(ammoThisChargeWouldRequire);
@@ -313,7 +366,7 @@ namespace Unity.FPS.Game
         {
             if (UseContinuousShootSound)
             {
-                if (m_WantsToShoot && m_CurrentAmmo >= 1f)
+                if (m_WantsToShoot && HasAmmo(1f))
                 {
                     if (!m_ContinuousShootAudioSource.isPlaying)
                     {
@@ -344,14 +397,18 @@ namespace Unity.FPS.Game
 
         public void UseAmmo(float amount)
         {
+            if (InfiniteAmmo)
+                return;
+
             m_CurrentAmmo = Mathf.Clamp(m_CurrentAmmo - amount, 0f, MaxAmmo);
-            m_CarriedPhysicalBullets -= Mathf.RoundToInt(amount);
-            m_CarriedPhysicalBullets = Mathf.Clamp(m_CarriedPhysicalBullets, 0, MaxAmmo);
             m_LastTimeShot = Time.time;
         }
 
         public bool HandleShootInputs(bool inputDown, bool inputHeld, bool inputUp)
         {
+            if (IsReloading)
+                return false;
+
             m_WantsToShoot = inputDown || inputHeld;
             switch (ShootType)
             {
@@ -392,13 +449,17 @@ namespace Unity.FPS.Game
 
         bool TryShoot()
         {
-            if (m_CurrentAmmo >= 1f
-                && m_LastTimeShot + DelayBetweenShots < Time.time)
+            if (HasAmmo(1f) && m_LastTimeShot + DelayBetweenShots < Time.time)
             {
                 HandleShoot();
-                m_CurrentAmmo -= 1f;
+                UseAmmo(1f);
 
                 return true;
+            }
+
+            if (AutomaticReload && GetCurrentAmmo() == 0)
+            {
+                StartReloadAnimation();
             }
 
             return false;
@@ -407,7 +468,7 @@ namespace Unity.FPS.Game
         bool TryBeginCharge()
         {
             if (!IsCharging
-                && m_CurrentAmmo >= AmmoUsedOnStartCharge
+                && HasAmmo(AmmoUsedOnStartCharge)
                 && Mathf.FloorToInt((m_CurrentAmmo - AmmoUsedOnStartCharge) * BulletsPerShot) > 0
                 && m_LastTimeShot + DelayBetweenShots < Time.time)
             {
@@ -417,6 +478,11 @@ namespace Unity.FPS.Game
                 IsCharging = true;
 
                 return true;
+            }
+
+            if (AutomaticReload && GetCurrentAmmo() == 0)
+            {
+                StartReloadAnimation();
             }
 
             return false;
@@ -435,6 +501,11 @@ namespace Unity.FPS.Game
             }
 
             return false;
+        }
+
+        bool HasAmmo(float amount)
+        {
+            return InfiniteAmmo || m_CurrentAmmo >= amount;
         }
 
         void HandleShoot()
@@ -469,7 +540,6 @@ namespace Unity.FPS.Game
             if (HasPhysicalBullets)
             {
                 ShootShell();
-                m_CarriedPhysicalBullets--;
             }
 
             m_LastTimeShot = Time.time;

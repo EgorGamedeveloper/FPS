@@ -82,6 +82,7 @@ MonoBehaviour:
   PickupVfxPrefab: {fileID: 0}
   WeaponPrefab: {fileID: 8323776800172828795, guid: 31d97e822763d1f4cb769f7e3f7f7333,
     type: 3}
+  DuplicateWeaponAmmo: 8
 --- !u!1 &7810732725597439403
 GameObject:
   m_ObjectHideFlags: 0

@@ -55,9 +55,9 @@ namespace Unity.FPS.UI
 
         void OnAmmoPickup(AmmoPickupEvent evt)
         {
-            if (evt.Weapon == m_Weapon)
+            if (evt.Weapon == m_Weapon || (m_Weapon != null && m_Weapon.AmmoMatches(evt.AmmoType)))
             {
-                BulletCounter.text = m_Weapon.GetCarriedPhysicalBullets().ToString();
+                BulletCounter.text = GetAmmoCounterText();
             }
         }
 
@@ -66,10 +66,8 @@ namespace Unity.FPS.UI
             m_Weapon = weapon;
             WeaponCounterIndex = weaponIndex;
             WeaponImage.sprite = weapon.WeaponIcon;
-            if (!weapon.HasPhysicalBullets)
-                BulletCounter.transform.parent.gameObject.SetActive(false);
-            else
-                BulletCounter.text = weapon.GetCarriedPhysicalBullets().ToString();
+            BulletCounter.transform.parent.gameObject.SetActive(true);
+            BulletCounter.text = GetAmmoCounterText();
 
             Reload.gameObject.SetActive(false);
             m_PlayerWeaponsManager = FindAnyObjectByType<PlayerWeaponsManager>();
@@ -86,7 +84,7 @@ namespace Unity.FPS.UI
             AmmoFillImage.fillAmount = Mathf.Lerp(AmmoFillImage.fillAmount, currenFillRatio,
                 Time.deltaTime * AmmoFillMovementSharpness);
 
-            BulletCounter.text = m_Weapon.GetCarriedPhysicalBullets().ToString();
+            BulletCounter.text = GetAmmoCounterText();
 
             bool isActiveWeapon = m_Weapon == m_PlayerWeaponsManager.GetActiveWeapon();
 
@@ -98,10 +96,15 @@ namespace Unity.FPS.UI
 
             FillBarColorChange.UpdateVisual(currenFillRatio);
 
-            Reload.gameObject.SetActive(m_Weapon.GetCarriedPhysicalBullets() > 0 && m_Weapon.GetCurrentAmmo() == 0 && m_Weapon.IsWeaponActive);
+            Reload.gameObject.SetActive(m_Weapon.IsWeaponActive && (m_Weapon.IsReloading || (m_Weapon.HasAmmoToReload() && m_Weapon.GetCurrentAmmo() == 0)));
         }
 
-        void Destroy()
+        string GetAmmoCounterText()
+        {
+            return $"{m_Weapon.GetCurrentAmmo()} / {m_Weapon.GetCarriedAmmo()}";
+        }
+
+        void OnDestroy()
         {
             EventManager.RemoveListener<AmmoPickupEvent>(OnAmmoPickup);
         }
