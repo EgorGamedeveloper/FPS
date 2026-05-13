@@ -11,8 +11,11 @@ namespace Unity.FPS.Game
         [Tooltip("The canvas group of the fade-to-black screen")]
         public CanvasGroup EndGameFadeCanvasGroup;
 
-        [Header("Win")] [Tooltip("This string has to be the name of the scene you want to load when winning")]
+        [Header("Win")] [Tooltip("This string has to be the name of the scene you want to load when winning the final level")]
         public string WinSceneName = "WinScene";
+
+        [Tooltip("When enabled, completing a level loads the next configured level scene before the final win scene")]
+        public bool UseLevelProgression = true;
 
         [Tooltip("Duration of delay before the fade-to-black, if winning")]
         public float DelayBeforeFadeToBlack = 4f;
@@ -76,7 +79,9 @@ namespace Unity.FPS.Game
             EndGameFadeCanvasGroup.gameObject.SetActive(true);
             if (win)
             {
-                m_SceneToLoad = WinSceneName;
+                m_SceneToLoad = UseLevelProgression
+                    ? LevelProgressionManager.CompleteCurrentLevelAndGetNextScene(WinSceneName)
+                    : WinSceneName;
                 m_TimeLoadEndGameScene = Time.time + EndSceneLoadDelay + DelayBeforeFadeToBlack;
 
                 // play a sound on win

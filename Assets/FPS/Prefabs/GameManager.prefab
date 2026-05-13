@@ -246,6 +246,7 @@ MonoBehaviour:
   EndSceneLoadDelay: 3
   EndGameFadeCanvasGroup: {fileID: 6089522275397732777}
   WinSceneName: WinScene
+  UseLevelProgression: 1
   DelayBeforeFadeToBlack: 4
   WinGameMessage: All objectives completed
   DelayBeforeWinMessage: 2
