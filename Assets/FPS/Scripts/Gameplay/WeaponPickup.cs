@@ -8,6 +8,9 @@ namespace Unity.FPS.Gameplay
         [Tooltip("The prefab for the weapon that will be added to the player on pickup")]
         public WeaponController WeaponPrefab;
 
+        [Tooltip("Ammo added if the player already owns this weapon")]
+        public int DuplicateWeaponAmmo = 0;
+
         protected override void Start()
         {
             base.Start();
@@ -33,6 +36,11 @@ namespace Unity.FPS.Gameplay
                         playerWeaponsManager.SwitchWeapon(true);
                     }
 
+                    PlayPickupFeedback();
+                    Destroy(gameObject);
+                }
+                else if (DuplicateWeaponAmmo > 0 && playerWeaponsManager.AddAmmo(WeaponPrefab.AmmoType, DuplicateWeaponAmmo) > 0)
+                {
                     PlayPickupFeedback();
                     Destroy(gameObject);
                 }

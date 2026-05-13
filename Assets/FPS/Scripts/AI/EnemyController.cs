@@ -453,6 +453,7 @@ namespace Unity.FPS.AI
                 for (int i = 0; i < m_Weapons.Length; i++)
                 {
                     m_Weapons[i].Owner = gameObject;
+                    m_Weapons[i].InfiniteAmmo = true;
                 }
             }
         }

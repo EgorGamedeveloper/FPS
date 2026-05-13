@@ -70,16 +70,20 @@ MonoBehaviour:
   RecoilForce: 1
   AimZoomRatio: 0.8
   AimOffset: {x: 0, y: 0, z: 0}
-  AutomaticReload: 1
+  AutomaticReload: 0
   HasPhysicalBullets: 0
   ClipSize: 30
   ShellCasing: {fileID: 0}
   EjectionPort: {fileID: 0}
   ShellCasingEjectionForce: 2
   ShellPoolSize: 1
-  AmmoReloadRate: 1
+  AmmoReloadRate: 1.8
   AmmoReloadDelay: 2
   MaxAmmo: 4
+  AmmoType: Discs
+  StartingCarriedAmmo: 8
+  MaxCarriedAmmo: 16
+  InfiniteAmmo: 0
   AutomaticReleaseOnCharged: 0
   MaxChargeDuration: 1.46
   AmmoUsedOnStartCharge: 1
