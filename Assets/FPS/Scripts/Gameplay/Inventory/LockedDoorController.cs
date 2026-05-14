@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -5,6 +6,9 @@ namespace Unity.FPS.Gameplay
 {
     public class LockedDoorController : MonoBehaviour
     {
+        public static event Action<LockedDoorController> OnDoorUnlocked;
+
+        public string DoorId;
         public Transform DoorVisual;
         public Vector3 OpenOffset = new Vector3(0f, 3f, 0f);
         public float OpenSpeed = 3f;
@@ -13,6 +17,7 @@ namespace Unity.FPS.Gameplay
         Vector3 m_OpenPosition;
         bool m_PlayerInRange;
         bool m_IsOpen;
+        bool m_HasBroadcastUnlock;
 
         void Start()
         {
@@ -29,12 +34,25 @@ namespace Unity.FPS.Gameplay
             {
                 if (PlayerMissionInventory.Instance != null && PlayerMissionInventory.Instance.TryConsumeKey())
                 {
-                    m_IsOpen = true;
+                    UnlockDoor();
                 }
             }
 
             Vector3 target = m_IsOpen ? m_OpenPosition : m_ClosedPosition;
             DoorVisual.position = Vector3.Lerp(DoorVisual.position, target, Time.deltaTime * OpenSpeed);
+        }
+
+        void UnlockDoor()
+        {
+            if (m_IsOpen)
+                return;
+
+            m_IsOpen = true;
+            if (!m_HasBroadcastUnlock)
+            {
+                m_HasBroadcastUnlock = true;
+                OnDoorUnlocked?.Invoke(this);
+            }
         }
 
         void OnTriggerEnter(Collider other)
