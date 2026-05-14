@@ -12,7 +12,8 @@ namespace Unity.FPS.Game
         public static readonly string[] LevelSceneNames =
         {
             "MainScene",
-            "SecondaryScene"
+            "SecondaryScene",
+            "ThirdScene"
         };
 
         public static int LevelCount => LevelSceneNames.Length;
