@@ -55,8 +55,15 @@ namespace Unity.FPS.Gameplay
             doorObjective.Description = "Подберите ключ и нажмите E у двери.";
             doorObjective.TargetDoorId = DoorId;
 
+            var resourceObjective = objectiveRoot.AddComponent<ObjectiveCollectAndDeliverResource>();
+            resourceObjective.Title = "Соберите ресурсы";
+            resourceObjective.Description = "Соберите 5 единиц ресурсов и принесите их в точку спавна.";
+            resourceObjective.ResourceToDeliver = 5;
+
             CreateDoor(startPosition + forward * 12f + Vector3.up * 1.5f, forward);
             CreateHiddenKey(startPosition + forward * 8f + right * 4f + Vector3.up * 0.6f, right);
+            CreateResourcePickups(startPosition, forward, right);
+            CreateSpawnDeliveryZone(startPosition, resourceObjective);
         }
 
         void CreateDoor(Vector3 position, Vector3 forward)
@@ -100,6 +107,43 @@ namespace Unity.FPS.Gameplay
             SetColor(key, new Color(1f, 0.82f, 0.12f));
             key.AddComponent<Rigidbody>();
             key.AddComponent<KeyPickup>();
+        }
+
+        void CreateResourcePickups(Vector3 startPosition, Vector3 forward, Vector3 right)
+        {
+            CreateResourcePickup("ThirdSceneResourcePickupA", startPosition + forward * 4f - right * 3f + Vector3.up * 0.6f);
+            CreateResourcePickup("ThirdSceneResourcePickupB", startPosition + forward * 6f + right * 2.5f + Vector3.up * 0.6f);
+            CreateResourcePickup("ThirdSceneResourcePickupC", startPosition + forward * 9f - right * 2f + Vector3.up * 0.6f);
+            CreateResourcePickup("ThirdSceneResourcePickupD", startPosition + forward * 11f + right * 3f + Vector3.up * 0.6f);
+            CreateResourcePickup("ThirdSceneResourcePickupE", startPosition + forward * 14f + Vector3.up * 0.6f);
+        }
+
+        void CreateResourcePickup(string name, Vector3 position)
+        {
+            GameObject resource = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            resource.name = name;
+            resource.transform.position = position;
+            resource.transform.localScale = Vector3.one * 0.55f;
+            SetColor(resource, new Color(0.15f, 0.85f, 1f));
+            resource.AddComponent<Rigidbody>();
+            ResourcePickup pickup = resource.AddComponent<ResourcePickup>();
+            pickup.Amount = 1;
+        }
+
+        void CreateSpawnDeliveryZone(Vector3 spawnPosition, ObjectiveCollectAndDeliverResource resourceObjective)
+        {
+            GameObject zone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            zone.name = "ThirdSceneSpawnResourceDeliveryZone";
+            zone.transform.position = spawnPosition + Vector3.up * 0.05f;
+            zone.transform.localScale = new Vector3(3.5f, 0.1f, 3.5f);
+            SetColor(zone, new Color(0.1f, 0.9f, 0.25f));
+
+            Collider zoneCollider = zone.GetComponent<Collider>();
+            zoneCollider.isTrigger = true;
+
+            ObjectiveDeliveryZone deliveryZone = zone.AddComponent<ObjectiveDeliveryZone>();
+            deliveryZone.TargetObjective = resourceObjective;
+            resourceObjective.DeliveryZone = zoneCollider;
         }
 
         static void SetColor(GameObject target, Color color)
